@@ -1,41 +1,37 @@
 'use client'
 
-import { useActionState, useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase'
+import { useState, useEffect } from 'react'
 import { logout, joinClass } from "@/lib/actions"
 import Link from "next/link"
 import { useRouter } from 'next/navigation'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [classes, setClasses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string>('')
 
   useEffect(() => {
+    let cancelled = false
     async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/auth/login'); return }
-      setUser(user)
-
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      setProfile(profile)
-
-      if (profile?.role === 'teacher') {
-        const { data } = await supabase.from('classes').select('*').eq('teacher_id', user.id).order('created_at', { ascending: false })
-        setClasses(data || [])
-      } else {
-        const { data } = await supabase
-          .from('class_members')
-          .select('classes(*)')
-          .eq('student_id', user.id)
-        setClasses((data || []).map((cm: any) => cm.classes).filter(Boolean))
+      try {
+        const res = await fetch('/api/dashboard')
+        if (res.status === 401) { router.push('/auth/login'); return }
+        const data = await res.json()
+        if (cancelled) return
+        setProfile(data.profile)
+        setClasses(data.classes || [])
+        setLoading(false)
+      } catch (e: any) {
+        if (!cancelled) {
+          setError(e.message || String(e))
+          setLoading(false)
+        }
       }
-      setLoading(false)
     }
     load()
+    return () => { cancelled = true }
   }, [router])
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-500">Loading...</p></div>
@@ -54,6 +50,11 @@ export default function DashboardPage() {
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-4 py-8">
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
+            Debug: {error}
+          </div>
+        )}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">My Classes</h2>
           {profile?.role === 'teacher' && (
