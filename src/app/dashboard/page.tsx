@@ -1,29 +1,44 @@
-import { createClient } from "@/lib/supabase-server"
+'use client'
+
+import { useActionState, useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase'
 import { logout, joinClass } from "@/lib/actions"
 import Link from "next/link"
-import { redirect } from "next/navigation"
+import { useRouter } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
+export default function DashboardPage() {
+  const router = useRouter()
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [classes, setClasses] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/auth/login'); return }
+      setUser(user)
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      setProfile(profile)
 
-  let classes: any[] = []
+      if (profile?.role === 'teacher') {
+        const { data } = await supabase.from('classes').select('*').eq('teacher_id', user.id).order('created_at', { ascending: false })
+        setClasses(data || [])
+      } else {
+        const { data } = await supabase
+          .from('class_members')
+          .select('classes(*)')
+          .eq('student_id', user.id)
+        setClasses((data || []).map((cm: any) => cm.classes).filter(Boolean))
+      }
+      setLoading(false)
+    }
+    load()
+  }, [router])
 
-  if (profile?.role === 'teacher') {
-    const { data } = await supabase.from('classes').select('*').eq('teacher_id', user.id).order('created_at', { ascending: false })
-    classes = data || []
-  } else {
-    const { data } = await supabase
-      .from('class_members')
-      .select('classes(*)')
-      .eq('student_id', user.id)
-    classes = (data || []).map((cm: any) => cm.classes).filter(Boolean)
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-500">Loading...</p></div>
 
   return (
     <div className="min-h-screen bg-gray-50">
