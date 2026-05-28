@@ -16,14 +16,14 @@ export async function signup(prevState: { error: string }, formData: FormData) {
   if (error) return { error: error.message }
 
   if (data.user) {
-    await supabase.from('profiles').insert({
-      id: data.user.id,
-      name,
-      role,
+    await supabase.rpc('create_profile', {
+      user_id: data.user.id,
+      user_name: name,
+      user_role: role,
     })
   }
 
-  redirect('/dashboard')
+  redirect('/auth/login?signed_up=1')
 }
 
 export async function login(prevState: { error: string }, formData: FormData) {
